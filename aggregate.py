@@ -6,7 +6,7 @@ data = "/Users/carltonking/Downloads/hvac-agent"
 
 print("Loading files...")
 con.execute(f"CREATE TABLE contracts AS SELECT * FROM read_csv_auto('{data}/contracts_all.csv')")
-con.execute(f"CREATE TABLE labor AS SELECT * FROM read_csv_auto('{data}/labor_logs_all.csv')")
+con.execute(f"CREATE TABLE labor AS SELECT * FROM read_csv_auto('{data}/labor_logs_clean.csv')")
 con.execute(f"CREATE TABLE sov_budget AS SELECT * FROM read_csv_auto('{data}/sov_budget_all.csv')")
 con.execute(f"CREATE TABLE materials AS SELECT * FROM read_csv_auto('{data}/material_deliveries_all.csv')")
 con.execute(f"CREATE TABLE billing AS SELECT * FROM read_csv_auto('{data}/billing_history_all.csv')")
