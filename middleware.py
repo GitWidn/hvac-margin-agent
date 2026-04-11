@@ -1,0 +1,1 @@
+# main.pyfrom fastapi import FastAPIfrom fastapi.middleware.cors import CORSMiddlewareapp = FastAPI()app.add_middleware(    CORSMiddleware,    allow_origins=["https://your-v0-app.vercel.app", "http://localhost:3000"],    allow_methods=["POST"],    allow_headers=["*"],)
