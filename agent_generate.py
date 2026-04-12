@@ -15,83 +15,110 @@ df = pd.read_csv('/content/output.csv')
 df = df.drop_duplicates("project_id")
 df=df.drop(['sov_line_id','line_number','description', 'actual_hours', 'pct_complete', 'approved_co_value',
        'pending_cos','LaborCost', 'Variance', 'Budget Coverage',],axis=1)
+df=df.sort_values(by='project_id',ascending=True)
 client = Anthropic(api_key="")
-df =df.iloc[126:]
-df=df.head(21)
-response = client.messages.create(
-    model="claude-sonnet-4-6",
-    max_tokens=6000,
-    messages=[
-    {
-            "role": "user",
-            "content":f"""
+chunk_size = 21
 
-You are an autonomous construction financial risk analyst.
-You will be given a dataset containing SOV-level project financial records.
-Dataset:
-{df}
+for i in range(21, len(df), chunk_size):
+    chunk = df.iloc[i:i+chunk_size]  
 
-CRITICAL INSTRUCTION
-Each row in the dataset already contains all necessary financial metrics.
-You do NOT need to perform any calculations.
+    response = client.messages.create(
+        model="claude-sonnet-4-6",
+        max_tokens=6000,
+        messages=[
+        {
+                "role": "user",
+                "content":f"""
 
-Your task is to:
-1. Group the data by project_id
-2. Analyze each project independently
-3. Interpret financial performance using existing metrics
-4. Identify risks and problems per project
-Rules to identify risks:
-Use these rules to assign risk:
-realized_margin_pct:
-- > 25% LOW
-- between 0% and 25 % MEDIUM
-- < 0%  CRITICAL
-labor_variance_pct:
-- < -30% LOW
-- between 30% and 5% MEDIUM
-- >= 5% Critical
-material_variance_pct:
-- <= 122%
-- between 122% and 140% MEDIUM
-- >= 140% CRITICAL
-OVERALL:
-- CRITICAL if any CRITICAL
-- MEDIUM if margin is MEDIUM or both labor material are MEDIUM
-- else LOW
-5. Provide specific recovery actions per project
-STRICT REQUIREMENTS (CONTENT ONLY)-
-For EACH project, your analysis MUST include:
+    You are an autonomous construction financial risk analyst.
+    You will be given a dataset containing SOV-level project financial records.
+    Dataset:
+    {chunk}
 
-- Project identification (project_id and/or project_name)
-- Contract value
-- Actual cost
-- Risk level
-- Realized margin or profitability indicator
-- Key root causes of issues: Root causes must describe the underlying field-level or operational reasons behind the financial deviations, not numerical comparisons. Limit to 40 words.
-- Must Provide Specific recovery actions. Limit to 40 words.
+    CRITICAL INSTRUCTION
+    Each row in the dataset already contains all necessary financial metrics.
+    You do NOT need to perform any calculations.
 
-IMPORTANT RULES
-- Treat each project independently (no cross-project mixing)
-- Do NOT compute new numerical values
-- Use only information already present in the dataset
-- Be precise, financial, and operationally actionable
+    Your task is to:
+    1. Group the data by project_id
+    2. Analyze each project independently
+    3. Interpret financial performance using existing metrics
+    4. Identify risks and problems per project
+    Rules to identify risks:
+    Use these rules to assign risk:
+    realized_margin_pct:
+    - > 25% LOW
+    - between 0% and 25 % MEDIUM
+    - < 0%  CRITICAL
+    labor_variance_pct:
+    - < -30% LOW
+    - between 30% and 5% MEDIUM
+    - >= 5% Critical
+    material_variance_pct:
+    - <= 122%
+    - between 122% and 140% MEDIUM
+    - >= 140% CRITICAL
+    OVERALL:
+    - CRITICAL if any CRITICAL
+    - MEDIUM if margin is MEDIUM or both labor material are MEDIUM
+    - else LOW
+    5. Provide specific recovery actions per project
+    STRICT REQUIREMENTS (CONTENT ONLY)-
+    For EACH project, your analysis MUST include:
 
-OUTPUT GUIDELINE
-Return results in structured JSON with project-level summaries
-Return VALID JSON only.
-Do not include backticks.
-Ensure all strings are properly closed.
+    - Project identification (project_id and/or project_name)
+    - Contract value
+    - Actual cost
+    - Risk level
+    - Realized margin or profitability indicator
+    - Key root causes of issues: Root causes must describe the underlying field-level or operational reasons behind the financial deviations, not numerical comparisons. Limit to 40 words.
+    - Must Provide Specific recovery actions. Limit to 40 words.
 
-"""
-        }
-    ]
-)
+    IMPORTANT RULES
+    - Treat each project independently (no cross-project mixing)
+    - Do NOT compute new numerical values
+    - Use only information already present in the dataset
+    - Be precise, financial, and operationally actionable
+
+    OUTPUT GUIDELINE
+    Return results in structured JSON with project-level summaries
+    Return VALID JSON only.
+    Do not include backticks.
+    Ensure all strings are properly closed.
+
+    """
+            }
+        ]
+    )
+    text = response.content[0].text
+    print(text)
+
+    with open("/content/report.txt", "a", encoding="utf-8") as f:
+        f.write(text)
 
 import json
+import re
+with open("/content/report.txt", "r", encoding="utf-8") as f:
+    text = f.read()
 
-text = response.content[0].text
-print(text)
+first = text.find("[")
+last = text.rfind("]")
 
-with open("/content/report.txt", "a", encoding="utf-8") as f:
-    f.write(text)
+inside = text[first+1:last]
+inside = inside.replace("[", "").replace("]", "")
+inside = inside.replace("}{", "},{")
+clean = "[" + inside + "]"
+clean = text.replace("```json", "").replace("```", "").strip()
+clean = re.sub(r'[\x00-\x1f\x7f]', ' ', clean)
 
+def fix_newlines_in_strings(s):
+    return re.sub(
+        r'("(?:[^"\\]|\\.)*")',
+        lambda m: m.group(0).replace("\n", "\\n"),
+        s
+    )
+clean = fix_newlines_in_strings(clean)
+print(clean)
+
+with open("/content/report.json", "w") as f:
+    json.dump(clean, f, indent=2)
